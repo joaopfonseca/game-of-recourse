@@ -1,9 +1,9 @@
 import streamlit as st
 import numpy as np
-import altair as alt
+import pandas as pd
 from sklearn.linear_model import LogisticRegression
-import matplotlib.pyplot as plt
 from mlresearch.utils import set_matplotlib_style
+import plotly.express as px
 
 from recgame.environments import (
     BaseEnvironment,
@@ -27,18 +27,12 @@ set_matplotlib_style()
 
 FRAMEWORKS = {
     "Basic": BaseEnvironment,
-    "Fair Selection": FairEnvironment,
-    "CDA": CDAEnvironment,
+    "Circumstance-Normalized Selection": FairEnvironment,
+    "Counterfactual Data Augmentation": CDAEnvironment,
     "Group Regularization": ModelRetrainEnvironment,
-    "Combined (Fair Selection + CDA)": FairCDAEnvironment,
+    "Combined (CNS + CDA)": FairCDAEnvironment,
 }
 
-
-"""
-# Generate some data
-
-This should be a collapsable section. The dataframe should be editable as well.
-"""
 
 #####################################################################
 # Global configurations
@@ -51,10 +45,11 @@ st.sidebar.markdown("# Configurations")
 pc = st.sidebar.expander("Population", expanded=False)
 
 distribution_type = pc.selectbox(
-    "Distribution type", options=["Basic", "Biased 1", "Biased 2 (hc)"]
+    "Distribution type",
+    options=["Single group", "Biased, no parity", "Biased, some parity"],
 )
-N_AGENTS = pc.number_input("Initial Agents", value=60)
-NEW_AGENTS = pc.number_input("New agents per time step", value=6)
+N_AGENTS = pc.number_input("Initial Agents", value=20)
+NEW_AGENTS = pc.number_input("New agents per time step", value=2)
 BIAS_FACTOR = pc.number_input("Bias factor", value=2)
 
 #####################################################################
@@ -67,19 +62,24 @@ environment_type = ec.selectbox(
     options=FRAMEWORKS.keys(),
 )
 
-N_LOANS = ec.number_input("Favorable outcomes", value=6)
+N_LOANS = ec.number_input("Favorable outcomes", value=2)
 ADAPTATION = ec.number_input(
     "Adaptation rate", value=0.5, min_value=0.0, max_value=1.0, step=0.1
 )
 
-BEHAVIOR = (
-    ec.selectbox(
-        "Behavior Function",
-        options=["Continuous/Constant", "Binary/Constant", "Continuous/Flexible"],
-    )
-    .lower()
-    .replace("/", "_")
+ADAPTATION_TYPE = ec.selectbox(
+    "Adaptation type",
+    options=["Continuous", "Binary"],
 )
+
+EFFORT_TYPE = ec.selectbox(
+    "Effort type",
+    options=["Constant", "Flexible"],
+)
+
+BEHAVIOR = (ADAPTATION_TYPE + "_" + EFFORT_TYPE).lower()
+
+TIME_STEPS = ec.number_input("Time steps", value=10)
 
 random_seed = st.sidebar.number_input("Random state", value=42)
 
@@ -93,21 +93,35 @@ random_seed = st.sidebar.number_input("Random state", value=42)
 #####################################################################
 #####################################################################
 
+"""
+# Welcome to the Game of Recourse!
+"""
+intro = st.expander("See more information")
+intro.write(
+    r"""
+    "Game of Recourse" is a simulator of recourse-providing environments, where agents
+    compete to obtain a scarce outcome, determined by an automated system (Machine
+    Learning classifier or otherwise). At each time step, agents that fail to receive it
+    will receive feedback (*i.e.*, algorithmic recourse) on why they failed, and
+    what they should do to improve.
+    """
+)
+
 
 #####################################################################
 # Generate data
 #####################################################################
 rng = np.random.default_rng(random_seed)
 
-if distribution_type == "Basic":
+if distribution_type == "Single group":
     scaler_func = get_scaler
     data_gen_func = generate_synthetic_data
 
-elif distribution_type == "Biased 1":
+elif distribution_type == "Biased, no parity":
     scaler_func = get_scaler
     data_gen_func = biased_data_generator
 
-elif distribution_type == "Biased 2 (hc)":
+elif distribution_type == "Biased, some parity":
     scaler_func = get_scaler_hc
     data_gen_func = biased_data_generator_hc
 
@@ -130,13 +144,36 @@ df = data_gen_func(
     N_AGENTS=N_AGENTS,
 )
 
-c = (
-    alt.Chart(df)
-    .mark_circle()
-    .encode(x="f0", y="f1", color="groups", tooltip=["f0", "f1", "groups"])
+#####################################################################
+# Initial data distribution
+#####################################################################
+"""
+# Initial data distribution
+"""
+idd = st.expander("See more information")
+idd.markdown(
+    """
+    Explanation on the choice of the data distribution goes here.
+
+    The dataframe should be editable as well.
+    """
 )
 
-st.altair_chart(c, use_container_width=True)
+
+df.groups = df.groups.astype(int).astype(str)
+fig = px.scatter(
+    df,
+    x="f0",
+    y="f1",
+    color="groups",
+)
+df.groups = df.groups.astype(float)
+
+tab1, tab2 = st.tabs(["Scatter plot", "Data"])
+with tab1:
+    st.plotly_chart(fig, use_container_width=True)
+with tab2:
+    df
 
 
 #####################################################################
@@ -145,22 +182,29 @@ st.altair_chart(c, use_container_width=True)
 """
 # Set up Ranker
 """
+idd = st.expander("See more information")
+idd.markdown(
+    """
+    Explanation on the ranker parameters goes here.
+
+    The dataframe should be editable as well.
+    """
+)
+
 col1, col2 = st.columns(2)
 
 with col1:
-    b1 = st.number_input(r"$\beta_0$", value=0.5, min_value=-2.0, max_value=2.0, step=0.1)
+    b1 = st.number_input(r"$\beta_0$", value=0.5, step=0.1)
 with col2:
-    b2 = st.number_input(r"$\beta_1$", value=0.5, min_value=-2.0, max_value=2.0, step=0.1)
+    b2 = st.number_input(r"$\beta_1$", value=0.5, step=0.1)
 
-if b1+b2 != 0:
-    b1 = b1 / (b1 + b2)
-    b2 = b2 / (b1 + b2)
+# "Regularize" coefficients
+total = np.abs(b1) + np.abs(b2)
+b1 = b1 / total
+b2 = b2 / total
 
 model = IgnoreGroupRanker(np.array([[b1, b2]]), ignore_feature="groups")
 y = model.predict(df)
-
-# st.write(model)
-
 
 #####################################################################
 # Set up environment
@@ -168,6 +212,12 @@ y = model.predict(df)
 """
 # Run environment
 """
+intro = st.expander("See more information")
+intro.write(
+    r"""
+    Description goes here.
+    """
+)
 
 
 def env_data_generator(n_agents):
@@ -184,10 +234,10 @@ def env_data_generator(n_agents):
 
 environment = FRAMEWORKS[environment_type]
 
-if environment_type in ["Basic", "Fair Selection"]:
+if environment_type in ["Basic", "Circumstance-Normalized Selection"]:
     pass
 
-elif environment_type in ["CDA", "Combined (Fair Selection + CDA)"]:
+elif environment_type in ["Counterfactual Data Augmentation", "Combined (CNS + CDA)"]:
     model = IgnoreGroupLR(ignore_feature="groups", random_state=random_seed)
     model.fit(df, y)
 
@@ -196,7 +246,7 @@ elif environment_type == "Group Regularization":
         LogisticRegression(random_state=random_seed),
         l=100,
         niter=100,
-        group_feature="groups"
+        group_feature="groups",
     )
     model.fit(df, y)
 
@@ -205,10 +255,14 @@ recourse = NFeatureRecourse(
     threshold=0.5,
     categorical=["groups"],
 )
+recourse.set_actions(df)
+recourse.action_set_.lb = 0.0
+recourse.action_set_.ub = 1.0
 
 kwargs = (
     {}
-    if environment_type in ["Basic", "Group Regularization", "CDA"]
+    if environment_type
+    in ["Basic", "Group Regularization", "Counterfactual Data Augmentation"]
     else {"group_feature": "groups"}
 )
 
@@ -222,11 +276,105 @@ environment = environment(
     growth_rate_type="absolute",
     adaptation=ADAPTATION,
     behavior_function=BEHAVIOR,
-    **kwargs
+    **kwargs,
 )
 
-environment.simulate(20)
+environment.simulate(TIME_STEPS)
 
-fig, ax = plt.subplots(1, 1)
-environment.plot.agent_scores(ax=ax)
-st.pyplot(fig)
+#####################################################################
+# Visualizations
+#####################################################################
+
+# fig, ax = plt.subplots(1, 1)
+# environment.plot.agent_scores(ax=ax)
+# st.pyplot(fig)
+
+dfs = []
+for i in range(0, TIME_STEPS + 1):
+    df = environment.metadata_[i]["X"]
+    df["Score"] = environment.metadata_[i]["score"]
+    df["Timestep"] = i
+    df["outcome"] = environment.metadata_[i]["outcome"]
+    df = df.reset_index(names="agent_id")
+    df.sort_values(by=["Score"], inplace=True, ascending=False)
+    df = df.reset_index(drop=True)
+    df["color"] = df.apply(
+        lambda row: (
+            "Group = "
+            + str(int(row["groups"]))
+            + " | "
+            + "Outcome = "
+            + str(int(row["outcome"]))
+        ),
+        axis=1,
+    )
+    dfs.append(df)
+
+df_f = pd.concat(dfs, ignore_index=True)
+
+
+def SetColor(x):
+    if x == "00":
+        return "lightblue"
+    elif x == "10":
+        return "darkblue"
+    elif x == "01":
+        return "lightgreen"
+    elif x == "11":
+        return "darkgreen"
+
+
+fig_scores = px.scatter(
+    df_f,
+    x="Timestep",
+    y="Score",
+    animation_frame="Timestep",
+    animation_group="agent_id",
+    color="color",
+    color_discrete_map={
+        "00": "lightblue",
+        "10": "darkblue",
+        "01": "lightgreen",
+        "11": "darkgreen",
+    },
+    log_x=False,
+    size_max=55,
+    range_x=[0, TIME_STEPS],
+    range_y=[0, 1],
+)  # .update_traces(marker=dict(color=list(map(SetColor, df_f['color']))))
+fig_scores.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
+
+
+fig_features = px.scatter(
+    df_f,
+    x="f0",
+    y="f1",
+    animation_frame="Timestep",
+    animation_group="agent_id",
+    color="color",
+    color_discrete_map={
+        "00": "lightblue",
+        "10": "darkblue",
+        "01": "lightgreen",
+        "11": "darkgreen",
+    },
+    log_x=False,
+    size_max=55,
+    range_x=[0, 1],
+    range_y=[0, 1],
+)  # .update_traces(marker=dict(color=list(map(SetColor, df_f['color']))))
+fig_features.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
+
+tab1, tab2 = st.tabs(["Scores", "Features"])
+with tab1:
+    st.plotly_chart(fig_scores)
+with tab2:
+    st.plotly_chart(fig_features)
+
+df_download = df_f.drop(columns="color").copy()
+df_download.groups = df_download.groups.astype(int)
+st.sidebar.download_button(
+    "Download data",
+    df_download.to_csv(index=False),
+    file_name="recourse_game_simulation.csv",
+)

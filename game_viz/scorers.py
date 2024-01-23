@@ -133,7 +133,7 @@ class RecourseAwareClassifer(BaseEstimator, ClassifierMixin):
         self.X_ = X
         self.y_ = y
 
-        f = lambda x: self._getLoss([x[0], x[1], x[2]], X, y, g) # noqa
+        f = lambda x: self._getLoss([x[0], x[1], x[2]], X, y, g)  # noqa
         minimizer_kwargs = {"method": "BFGS", "jac": False}
         x0 = self._getx0(self.X_, self.y_)
         ret = basinhopping(f, x0, minimizer_kwargs=minimizer_kwargs, niter=2)
