@@ -25,12 +25,14 @@ from recourse import NFeatureRecourse
 
 set_matplotlib_style()
 
+TOOLKITNAME = "Game of Recourse"
+
 st.set_page_config(
-        page_title="Game of Recourse",
+        page_title=TOOLKITNAME,
 )
 
 FRAMEWORKS = {
-    "Basic": BaseEnvironment,
+    "No bias mitigation": BaseEnvironment,
     "Circumstance-Normalized Selection": FairEnvironment,
     "Counterfactual Data Augmentation": CDAEnvironment,
     "Group Regularization": ModelRetrainEnvironment,
@@ -48,27 +50,22 @@ st.sidebar.markdown("# Configurations")
 #####################################################################
 pc = st.sidebar.expander("Population", expanded=False)
 
+N_AGENTS = pc.number_input("Initial agents", value=20)
+NEW_AGENTS = pc.number_input("New agents per timestep", value=2)
 distribution_type = pc.selectbox(
     "Distribution type",
     options=["Single group", "Biased, no parity", "Biased, some parity"],
 )
-N_AGENTS = pc.number_input("Initial Agents", value=20)
-NEW_AGENTS = pc.number_input("New agents per time step", value=2)
-BIAS_FACTOR = pc.number_input("Bias factor", value=2)
+BIAS_FACTOR = pc.number_input("Qualification (bias factor)", value=2)
 
 #####################################################################
 # Environment configurations
 #####################################################################
 ec = st.sidebar.expander("Environment", expanded=False)
 
-environment_type = ec.selectbox(
-    "Environment type",
-    options=FRAMEWORKS.keys(),
-)
-
 N_LOANS = ec.number_input("Favorable outcomes", value=2)
 ADAPTATION = ec.number_input(
-    "Adaptation rate", value=0.5, min_value=0.0, max_value=1.0, step=0.1
+    "Global difficulty", value=0.5, min_value=0.0, max_value=1.0, step=0.1
 )
 
 ADAPTATION_TYPE = ec.selectbox(
@@ -83,7 +80,12 @@ EFFORT_TYPE = ec.selectbox(
 
 BEHAVIOR = (ADAPTATION_TYPE + "_" + EFFORT_TYPE).lower()
 
-TIME_STEPS = ec.number_input("Time steps", value=10)
+TIME_STEPS = ec.number_input("Timesteps", value=10)
+
+environment_type = ec.selectbox(
+    "Bias mitigation strategy",
+    options=FRAMEWORKS.keys(),
+)
 
 random_seed = st.sidebar.number_input("Random state", value=42)
 
@@ -97,15 +99,15 @@ random_seed = st.sidebar.number_input("Random state", value=42)
 #####################################################################
 #####################################################################
 
-"""
-# Welcome to the Game of Recourse!
+f"""
+# Welcome to the {TOOLKITNAME}!
 """
 intro = st.expander("See more information")
 intro.write(
-    r"""
-    "Game of Recourse" is a simulator of recourse-providing environments, where agents
+    f"""
+    "{TOOLKITNAME}" is a simulator of recourse-providing environments, where agents
     compete to obtain a scarce outcome, determined by an automated system (Machine
-    Learning classifier or otherwise). At each time step, agents that fail to receive it
+    Learning classifier or otherwise). At each timestep, agents that fail to receive it
     will receive feedback (*i.e.*, algorithmic recourse) on why they failed, and
     what they should do to improve.
     """
@@ -238,7 +240,7 @@ def env_data_generator(n_agents):
 
 environment = FRAMEWORKS[environment_type]
 
-if environment_type in ["Basic", "Circumstance-Normalized Selection"]:
+if environment_type in ["No bias mitigation", "Circumstance-Normalized Selection"]:
     pass
 
 elif environment_type in ["Counterfactual Data Augmentation", "Combined (CNS + CDA)"]:
@@ -266,7 +268,7 @@ recourse.action_set_.ub = 1.0
 kwargs = (
     {}
     if environment_type
-    in ["Basic", "Group Regularization", "Counterfactual Data Augmentation"]
+    in ["No bias mitigation", "Group Regularization", "Counterfactual Data Augmentation"]
     else {"group_feature": "groups"}
 )
 
