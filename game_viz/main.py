@@ -25,6 +25,10 @@ from recourse import NFeatureRecourse
 
 set_matplotlib_style()
 
+st.set_page_config(
+        page_title="Game of Recourse",
+)
+
 FRAMEWORKS = {
     "Basic": BaseEnvironment,
     "Circumstance-Normalized Selection": FairEnvironment,
