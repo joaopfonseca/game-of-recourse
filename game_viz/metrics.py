@@ -18,14 +18,17 @@ def fairness_metrics_viz_data(environment):
         agents_info["favorable_step"] - agents_info["entered_step"]
     )
 
+    agents_info["total_effort"] = (
+        agents_info["final_score"] - agents_info["original_score"]
+    )
+
     results = {}
 
     ai_etr = agents_info  # .dropna(subset="favorable_step")
     if groups.unique().shape[0] != 1:
         # ETR - Effort to recourse
-        ai_etr = ai_etr[ai_etr["n_adaptations"] != 0]
+        # ai_etr = ai_etr[ai_etr["n_adaptations"] != 0]
 
-        ai_etr["total_effort"] = ai_etr["final_score"] - ai_etr["original_score"]
         etr = ai_etr.groupby("groups").mean()["total_effort"]
         results["effort_to_recourse_ratio"] = etr.loc[0] / etr.loc[1]
 

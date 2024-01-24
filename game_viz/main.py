@@ -4,6 +4,8 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from mlresearch.utils import set_matplotlib_style
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 from recgame.environments import (
     BaseEnvironment,
@@ -380,31 +382,13 @@ fig_features = px.scatter(
 )  # .update_traces(marker=dict(color=list(map(SetColor, df_f['color']))))
 fig_features.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
 
-metrics, results = fairness_metrics_viz_data(environment)
-metrics.index.rename("Agent ID", inplace=True)
-
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Scores", "Features", "Agents Info", "Fairness Metrics"]
+tab1, tab2, = st.tabs(
+    ["Scores", "Features"]
 )
 with tab1:
     st.plotly_chart(fig_scores)
 with tab2:
     st.plotly_chart(fig_features)
-with tab3:
-    st.write(
-        metrics
-    )
-with tab4:
-    if df_f.groups.unique().shape[0] == 1:
-        st.warning(
-            "Fairness metrics cannot be computed when there is only a single group. "
-            "Change to a \"Biased\" distribution type to use this functionality.",
-            icon="⚠️"
-        )
-    else:
-        results = pd.Series(results).to_frame().reset_index()
-        fig_results = px.bar(results, x="index", y=0)
-        st.plotly_chart(fig_results)
 
 df_download = df_f.drop(columns="color").copy()
 df_download.groups = df_download.groups.astype(int)
@@ -413,3 +397,64 @@ st.sidebar.download_button(
     df_download.to_csv(index=False),
     file_name="recourse_game_simulation.csv",
 )
+
+#####################################################################
+# Metrics
+#####################################################################
+"""
+# Simulation analysis
+"""
+
+metrics, results = fairness_metrics_viz_data(environment)
+metrics.index.rename("Agent ID", inplace=True)
+metrics.columns = metrics.columns.str.replace("_", " ").str.title()
+metrics.Groups = metrics.Groups.astype(int)
+metrics.rename(columns={"Time For Recourse": "Time To Recourse"}, inplace=True)
+
+tab1, tab2, tab3 = st.tabs(
+    ["Agents Info", "Environment Metrics", "Fairness Metrics"]
+)
+with tab1:
+    st.write(
+        metrics
+    )
+
+with tab2:
+    cols = ["Time To Recourse", "Total Effort"]
+    fig_metrics = make_subplots(rows=2, cols=1, subplot_titles=cols)
+
+    for i, col in enumerate(cols):
+        _fig = px.box(metrics.sort_values("Groups"), x=col, color="Groups")
+        for t in _fig.data:
+            t.update(showlegend=(not bool(i)))
+            fig_metrics.add_trace(t, row=i+1, col=1)
+
+    fig_metrics.update_layout(
+        boxmode="group", margin={"l": 0, "r": 0, "t": 20, "b": 0}
+    )
+
+    st.plotly_chart(fig_metrics)
+
+    # Success rate
+    df_rr = environment.analysis.success_rate(filter_feature="groups")
+    df_rr.columns = df_rr.columns.astype(int).astype(str)
+    df_rr = df_rr.fillna(1).mean()
+    df_rr.index = df_rr.index.rename("Group").astype(str)
+    df_rr.rename("Recourse Reliability", inplace=True)
+
+    fig_rr = px.bar(df_rr.reset_index(), x="Group", y="Recourse Reliability")
+    fig_rr.update_xaxes(dtick=1)
+    st.plotly_chart(fig_rr)
+
+with tab3:
+    if df_f.groups.unique().shape[0] == 1:
+        st.warning(
+            "Fairness metrics cannot be computed when there is only a single group. "
+            "Change to a \"Biased\" distribution type to use this functionality.",
+            icon="⚠️"
+        )
+    else:
+        # results = pd.Series(results).to_frame().reset_index()
+        x = [key.replace("_", " ").title() for key in results.keys()]
+        fig_results = go.Figure([go.Bar(x=x, y=list(results.values()))])
+        st.plotly_chart(fig_results)
