@@ -22,6 +22,7 @@ from data_generators import (
 )
 from scorers import IgnoreGroupRanker, IgnoreGroupLR, RecourseAwareClassifer
 from recourse import NFeatureRecourse
+from metrics import fairness_metrics_viz_data
 
 set_matplotlib_style()
 
@@ -110,6 +111,13 @@ intro.write(
     Learning classifier or otherwise). At each timestep, agents that fail to receive it
     will receive feedback (*i.e.*, algorithmic recourse) on why they failed, and
     what they should do to improve.
+
+
+    TODO (regarding text):
+    - Add authors list
+    - Proper intro
+    - Explanations for each component in the main body
+    - Add formula in Ranker (use latex)
     """
 )
 
@@ -282,6 +290,7 @@ environment = environment(
     growth_rate_type="absolute",
     adaptation=ADAPTATION,
     behavior_function=BEHAVIOR,
+    random_state=random_seed,
     **kwargs,
 )
 
@@ -297,7 +306,7 @@ environment.simulate(TIME_STEPS)
 
 dfs = []
 for i in range(0, TIME_STEPS + 1):
-    df = environment.metadata_[i]["X"]
+    df = environment.metadata_[i]["X"].copy()
     df["Score"] = environment.metadata_[i]["score"]
     df["Timestep"] = i
     df["outcome"] = environment.metadata_[i]["outcome"]
@@ -371,11 +380,31 @@ fig_features = px.scatter(
 )  # .update_traces(marker=dict(color=list(map(SetColor, df_f['color']))))
 fig_features.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
 
-tab1, tab2 = st.tabs(["Scores", "Features"])
+metrics, results = fairness_metrics_viz_data(environment)
+metrics.index.rename("Agent ID", inplace=True)
+
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Scores", "Features", "Agents Info", "Fairness Metrics"]
+)
 with tab1:
     st.plotly_chart(fig_scores)
 with tab2:
     st.plotly_chart(fig_features)
+with tab3:
+    st.write(
+        metrics
+    )
+with tab4:
+    if df_f.groups.unique().shape[0] == 1:
+        st.warning(
+            "Fairness metrics cannot be computed when there is only a single group. "
+            "Change to a \"Biased\" distribution type to use this functionality.",
+            icon="⚠️"
+        )
+    else:
+        results = pd.Series(results).to_frame().reset_index()
+        fig_results = px.bar(results, x="index", y=0)
+        st.plotly_chart(fig_results)
 
 df_download = df_f.drop(columns="color").copy()
 df_download.groups = df_download.groups.astype(int)
