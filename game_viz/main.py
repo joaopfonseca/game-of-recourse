@@ -411,8 +411,11 @@ metrics.columns = metrics.columns.str.replace("_", " ").str.title()
 metrics.Groups = metrics.Groups.astype(int)
 metrics.rename(columns={"Time For Recourse": "Time To Recourse"}, inplace=True)
 
-tab1, tab2, tab3 = st.tabs(
-    ["Agents Info", "Environment Metrics", "Fairness Metrics"]
+# tab1, tab2, tab3 = st.tabs(
+#     ["Agents Info", "Environment Metrics", "Fairness Metrics"]
+# )
+tab1, tab2 = st.tabs(
+    ["Agents Info", "Environment Metrics"]
 )
 with tab1:
     st.write(
@@ -435,18 +438,32 @@ with tab2:
 
     st.plotly_chart(fig_metrics)
 
-    # Success rate
+    # Recourse Reliability
     df_rr = environment.analysis.success_rate(filter_feature="groups")
     df_rr.columns = df_rr.columns.astype(int).astype(str)
     df_rr = df_rr.fillna(1).mean()
-    df_rr.index = df_rr.index.rename("Group").astype(str)
-    df_rr.rename("Recourse Reliability", inplace=True)
 
-    fig_rr = px.bar(df_rr.reset_index(), x="Group", y="Recourse Reliability")
-    fig_rr.update_xaxes(dtick=1)
-    st.plotly_chart(fig_rr)
+    """
+    ________________________
+    **Recourse Reliability**
+    """
+    cols = st.columns(df_rr.shape[0])
+    for col_id, i in enumerate(df_rr.index):
+        with cols[col_id]:
+            st.metric(f"Group {i}", np.round(df_rr.loc[i], 2))
 
-with tab3:
+    # df_rr.index = df_rr.index.rename("Group").astype(str)
+    # df_rr.rename("Recourse Reliability", inplace=True)
+
+    # fig_rr = px.bar(df_rr.reset_index(), x="Group", y="Recourse Reliability")
+    # fig_rr.update_xaxes(dtick=1)
+    # st.plotly_chart(fig_rr)
+
+    """
+    ____________________
+    **Fairness Metrics**
+    """
+# with tab3:
     if df_f.groups.unique().shape[0] == 1:
         st.warning(
             "Fairness metrics cannot be computed when there is only a single group. "
@@ -454,7 +471,11 @@ with tab3:
             icon="⚠️"
         )
     else:
-        # results = pd.Series(results).to_frame().reset_index()
-        x = [key.replace("_", " ").title() for key in results.keys()]
-        fig_results = go.Figure([go.Bar(x=x, y=list(results.values()))])
-        st.plotly_chart(fig_results)
+        cols = st.columns(len(results))
+        for col_id, (key, value) in enumerate(results.items()):
+            with cols[col_id]:
+                st.metric(key.replace("_", " ").title(), np.round(value, 2))
+
+        # x = [key.replace("_", " ").title() for key in results.keys()]
+        # fig_results = go.Figure([go.Bar(x=x, y=list(results.values()))])
+        # st.plotly_chart(fig_results)
