@@ -51,7 +51,7 @@ st.sidebar.markdown("# Configurations")
 #####################################################################
 # Population configurations
 #####################################################################
-pc = st.sidebar.expander("Population", expanded=False)
+pc = st.sidebar.expander("Population", expanded=True)
 
 N_AGENTS = pc.number_input("Initial agents", value=20)
 NEW_AGENTS = pc.number_input("New agents per timestep", value=2)
@@ -64,7 +64,7 @@ BIAS_FACTOR = pc.number_input("Qualification (bias factor)", value=2)
 #####################################################################
 # Environment configurations
 #####################################################################
-ec = st.sidebar.expander("Environment", expanded=False)
+ec = st.sidebar.expander("Environment", expanded=True)
 
 N_LOANS = ec.number_input("Favorable outcomes", value=2)
 ADAPTATION = ec.number_input(
@@ -90,6 +90,22 @@ environment_type = ec.selectbox(
     options=FRAMEWORKS.keys(),
 )
 
+ec.markdown("Configure ranker")
+
+col1, col2 = ec.columns(2)
+
+with col1:
+    b1 = st.number_input(r"$\beta_0$", value=0.5, step=0.1)
+with col2:
+    b2 = st.number_input(r"$\beta_1$", value=0.5, step=0.1)
+
+# "Regularize" coefficients
+total = np.abs(b1) + np.abs(b2)
+b1 = b1 / total
+b2 = b2 / total
+
+
+
 random_seed = st.sidebar.number_input("Random state", value=42)
 
 #####################################################################
@@ -103,23 +119,24 @@ random_seed = st.sidebar.number_input("Random state", value=42)
 #####################################################################
 
 f"""
-# Welcome to the {TOOLKITNAME}!
+# The {TOOLKITNAME}
 """
 intro = st.expander("See more information")
 intro.write(
     f"""
-    "{TOOLKITNAME}" is a simulator of recourse-providing environments, where agents
-    compete to obtain a scarce outcome, determined by an automated system (Machine
-    Learning classifier or otherwise). At each timestep, agents that fail to receive it
-    will receive feedback (*i.e.*, algorithmic recourse) on why they failed, and
-    what they should do to improve.
+    The {TOOLKITNAME} is an agent-based simulation for synthesizing and analyzing
+    real-world algorithmic data. It was built to help practitioners and system-level
+    designers improve the reliability and fairness of recourse over time.
 
+    To use the Game of Recourse, simply configure the Population and Environment
+    settings for the simulation in the panel on the left side of the screen, and then
+    continue through the widgets below.
 
-    TODO (regarding text):
-    - Add authors list
-    - Proper intro
-    - Explanations for each component in the main body
-    - Add formula in Ranker (use latex)
+    To see more information, such as an explanation of each parameter, visit the
+    [GitHub repository](https://github.com/joaopfonseca/game-of-recourse).
+
+    This application is based on the paper ["Setting the Right Expectations: Algorithmic
+    Recourse over Time"](https://dl.acm.org/doi/pdf/10.1145/3617694.3623251).
     """
 )
 
@@ -164,28 +181,29 @@ df = data_gen_func(
 # Initial data distribution
 #####################################################################
 """
-# Initial data distribution
+# Visualize initial population
 """
 idd = st.expander("See more information")
 idd.markdown(
     """
-    Explanation on the choice of the data distribution goes here.
-
-    The dataframe should be editable as well.
+    This widget provides an overview of the data defined in the "population"
+    configuration panel. The initial population data can be visualized in a scatter
+    plot (see "Scatter plot" tab), or alternatively, manually inspected (see "Raw data"
+    tab).
     """
 )
 
 
 df.groups = df.groups.astype(int).astype(str)
 fig = px.scatter(
-    df,
-    x="f0",
-    y="f1",
+    df.rename(columns={"f0": "Feature 0", "f1": "Feature 1"}),
+    x="Feature 0",
+    y="Feature 1",
     color="groups",
 )
 df.groups = df.groups.astype(float)
 
-tab1, tab2 = st.tabs(["Scatter plot", "Data"])
+tab1, tab2 = st.tabs(["Scatter plot", "Raw data"])
 with tab1:
     st.plotly_chart(fig, use_container_width=True)
 with tab2:
@@ -195,30 +213,6 @@ with tab2:
 #####################################################################
 # Set up model
 #####################################################################
-"""
-# Set up Ranker
-"""
-idd = st.expander("See more information")
-idd.markdown(
-    """
-    Explanation on the ranker parameters goes here.
-
-    The dataframe should be editable as well.
-    """
-)
-
-col1, col2 = st.columns(2)
-
-with col1:
-    b1 = st.number_input(r"$\beta_0$", value=0.5, step=0.1)
-with col2:
-    b2 = st.number_input(r"$\beta_1$", value=0.5, step=0.1)
-
-# "Regularize" coefficients
-total = np.abs(b1) + np.abs(b2)
-b1 = b1 / total
-b2 = b2 / total
-
 model = IgnoreGroupRanker(np.array([[b1, b2]]), ignore_feature="groups")
 y = model.predict(df)
 
@@ -226,12 +220,16 @@ y = model.predict(df)
 # Set up environment
 #####################################################################
 """
-# Run environment
+# Explore simulation
 """
 intro = st.expander("See more information")
 intro.write(
     r"""
-    Description goes here.
+    In this widget, the simulation can be visualized in two different interactive
+    scatter plots: either as a function of ranker score and timestep, or within the
+    feature space (i.e. see how agent features are changing). Use the tabs to move
+    between plots. Both visualizations contain a play and stop button to see the
+    progression of the agents through the simulation.
     """
 )
 
@@ -363,9 +361,9 @@ fig_scores.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000
 
 
 fig_features = px.scatter(
-    df_f,
-    x="f0",
-    y="f1",
+    df_f.rename(columns={"f0": "Feature 0", "f1": "Feature 1"}),
+    x="Feature 0",
+    y="Feature 1",
     animation_frame="Timestep",
     animation_group="agent_id",
     color="color",
@@ -402,8 +400,26 @@ st.sidebar.download_button(
 # Metrics
 #####################################################################
 """
-# Simulation analysis
+# Analyze simulation
 """
+
+intro = st.expander("See more information")
+intro.write(
+    """
+    This widget is split into two tabs. The "Agent info" tab contains a table with
+    metadata about every agent that entered the simulation at some point in time. The
+    "Environment metrics" tab presents two box plots about the number of timesteps
+    required for agents to achieve the outcome (Time For Recourse), the score variation
+    incurred to achieve the outcome (Total Effort), and a group-wise Recourse
+    Reliability metric. Note that Effort to Recourse ratio and Time to Recourse
+    difference are reported, with the disadvantaged population as the reference group.
+    This means that effort to Recourse values over 1.0 indicate that the disadvantaged
+    group is exerting more effort per successful recourse event than the advantaged
+    group. Time to Recourse difference is the literal amount of additional timesteps it
+    takes for a member of the disadvantaged population to achieve recourse.
+    """
+)
+
 
 metrics, results = fairness_metrics_viz_data(environment)
 metrics.index.rename("Agent ID", inplace=True)
@@ -415,7 +431,7 @@ metrics.rename(columns={"Time For Recourse": "Time To Recourse"}, inplace=True)
 #     ["Agents Info", "Environment Metrics", "Fairness Metrics"]
 # )
 tab1, tab2 = st.tabs(
-    ["Agents Info", "Environment Metrics"]
+    ["Agent info", "Simulation metrics"]
 )
 with tab1:
     st.write(
