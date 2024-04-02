@@ -53,44 +53,48 @@ st.sidebar.markdown("# Configurations")
 #####################################################################
 pc = st.sidebar.expander("Population", expanded=True)
 
-N_AGENTS = pc.number_input("Initial agents", value=20)
-NEW_AGENTS = pc.number_input("New agents per timestep", value=2)
+N_AGENTS = pc.number_input("Initial agents", value=20, help="The number of agents that are created at tilmestep t=0, i.e. the number of agents that exist in the simulation when it begins.")
+NEW_AGENTS = pc.number_input("New agents per timestep", value=2, help="The number of new agents that enter at each time step. This number is fixed throughout the entire simulation.")
 distribution_type = pc.selectbox(
     "Distribution type",
     options=["Single group", "Biased, no parity", "Biased, some parity"],
+    help="We allow data to be generated with three different distributions. Single group is when there is only one group. No parity is when the data is strongly biased, and there is no parity at all between individuals in the groups; imagine Figure 2 in the SIGMOD demo paper, but if all those individuals to the right of the vertical dashed line were not present. Some parity is when data is generated according to the distribution shown in Figure 2."
 )
-BIAS_FACTOR = pc.number_input("Qualification (bias factor)", value=2)
+BIAS_FACTOR = pc.number_input("Qualification (bias factor)", value=2, help="The amount of bias that exists between the advantaged and disadvantaged group. It represents the number of standard deviations between the group means.")
 
 #####################################################################
 # Environment configurations
 #####################################################################
 ec = st.sidebar.expander("Environment", expanded=True)
 
-N_LOANS = ec.number_input("Favorable outcomes", value=2)
+N_LOANS = ec.number_input("Favorable outcomes", value=2, help="The number of individuals that receive a positive outcome at each time step (including time-step 0).")
 ADAPTATION = ec.number_input(
-    "Global difficulty", value=0.5, min_value=0.0, max_value=1.0, step=0.1
+    "Global difficulty", value=0.5, min_value=0.0, max_value=1.0, step=0.1, help="Global difficulty is the difficulty of acting on a recourse recommendation, for each agent. For example, it may be easier to act on a recommendation when it is related to appealing a social media ban versus improving one's credit score. Higher value indicate easier recourse."
 )
 
 ADAPTATION_TYPE = ec.selectbox(
     "Adaptation type",
     options=["Continuous", "Binary"],
+    help="This consideration refers to how faithfully an agent follows the recourse recommendation. Agents may follow the recourse recommendation exactly, or they may outperform (or underperform) the recommendation. In the loan example, if an individual is told to increase their credit score by 50 points, they may do so exactly, or they may actually increase their score by 40 point, or by 60 points. We call the behavior where agents exactly match recourse recommendations “binary” adaptation, and otherwise, we call it “continuous” adaptation."
 )
 
 EFFORT_TYPE = ec.selectbox(
     "Effort type",
     options=["Constant", "Flexible"],
+    help="This consideration refers to the likelihood of an agent to take any action. An individual that receives a recourse recommendation may or may not act on it. It is determined by several factors, like their implicit willingness to take on challenges or the amount of effort the action requires. For example, if an agent is told to increase their credit score by 20 points to qualify for a loan, they may be more likely to make the effort as opposed to being told to increase it by 200 points. When agents have a fixed willingness to act on recourse we call it “constant” effort, and when agents base their decision to take action on the magnitude of required change, we call it “flexible” effort."
 )
 
 BEHAVIOR = (ADAPTATION_TYPE + "_" + EFFORT_TYPE).lower()
 
-TIME_STEPS = ec.number_input("Timesteps", value=10)
+TIME_STEPS = ec.number_input("Timesteps", value=10, help="The number of steps of the simulation. Keep in mind the simulation starts at t=0.")
 
 environment_type = ec.selectbox(
     "Bias mitigation strategy",
     options=FRAMEWORKS.keys(),
+    help="There are three known strategies for mitigating unfairness in recourse. The first method, proposed by us in recent work, is Circumstance-Normalized Selection (CNA), and is a post-processing intervention based on rank-aware proportional representation. It involves assigning positive outcomes to the highest-scoring individuals from each sub-population, proportionally by population size. The second method is a pre-processing intervention known as Counterfactual Data Augmentation (CDA), and it works by augmenting the initial data with counterfactuals for individuals who received the negative outcome, and then re-training the classifier (or ranker) on this new data. The third mitigation strategy is Group Regularization, which involves re-positioning the decision boundary of a classifier during training to be equidistant from negatively-classified individuals from different groups. As a result, differences in initial circumstances are mitigated. We also allow for a fourth method, which is a combination of CNS and CDA, proposed by us in recent work."
 )
 
-ec.markdown("Configure ranker")
+ec.markdown("Configure ranker", help="Define the two weighting coefficients for the features. The formula for determining an agent’s score is B_0 * feature 0 + B_1 + feature 1.")
 
 col1, col2 = ec.columns(2)
 
@@ -106,7 +110,7 @@ b2 = b2 / total
 
 
 
-random_seed = st.sidebar.number_input("Random state", value=42)
+random_seed = st.sidebar.number_input("Random state", value=42, help="Control the randomization of the framework.")
 
 #####################################################################
 #####################################################################
